@@ -1,0 +1,23 @@
+{
+  "name": "pj",
+  "version": "0.1.0",
+  "description": "Create SQL strings for PostgreSQL by interfacing with a javascript API",
+  "main": "./lib",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/blake-regalia/node-pj.git"
+  },
+  "keywords": [
+    "pjs",
+    "postgres"
+  ],
+  "author": "Blake Regalia <blake.regalia@gmail.com> (http://blake-regalia.com)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/blake-regalia/node-pj/issues"
+  },
+  "homepage": "https://github.com/blake-regalia/node-pj"
+}
