@@ -28,8 +28,15 @@ pj.from('retailers')
 	.dump();
 ```
 
-outputs:
+is equivalent to:
 
 ```sql
-select ST_AsGeoJSON("retailers"."location") as "location", "retailers"."name" from "retailers" where ("retailers"."country"='United States' and "retailers"."state" != 'Texas') order by "name" asc
+select
+    ST_AsGeoJSON("retailers"."location") as "location",
+    "retailers"."name" 
+from "retailers"
+where (
+    "retailers"."country"='United States'
+      and "retailers"."state" != 'Texas'
+) order by "name" asc
 ```
