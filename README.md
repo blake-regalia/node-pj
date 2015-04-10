@@ -3,7 +3,7 @@
 
 ## Install
 ```sh
-$ npm install pjs
+$ npm install pj
 ```
 
 
@@ -12,17 +12,17 @@ $ npm install pjs
 ### Select
 
 ```javascript
-var pjs = require('pjs');
+var pj = require('pj');
 
-pjs.config({
+pj.config({
 	global: true,
 });
 
-pjs.from('retailers')
+pj.from('retailers')
     .select('name','location::geojson')
     .where({
         country: 'United States',
-		state: pg('!=','Texas'),
+		state: pj('!=','Texas'),
 	})
 	.order('name')
 	.dump();
