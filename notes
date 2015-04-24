@@ -1,0 +1,235 @@
+var pj = require('pj');
+
+var db = new pj('blake@/project_db');
+
+
+
+var exclude_states = ['Hawaii','Alaska'];
+db.from('retailers')
+    .select('name','location::geojson')
+    .where({
+        country: 'United States',
+		state: pj('!=', exclude_states),
+	})
+	.order('name')
+	.log();
+
+
+`::` - "in the form of" operator (overloaded type-cast operator)
+	* eg: `.select('location::geojson')`
+	* eg: `.select('location::int')`
+
+`=` - sets the output name
+	* eg: `.select('locA=tableA.location', 'locB=tableB.location')`
+
+`@` - shortcut for the `DISTINCT` operator
+	* eg: `.select('@icon') ...` => `select distinct "icon" ...`
+
+`,` - concatenates fields together using comma delimiter
+	* eg: `.select('color item')` => `select concat("color",' ',"item")`
+
+` ` - concatenates fields together using space delimiter
+	* eg: `.select('a,b,c')` => `select concat("a",',',"b",',',"c")`
+	* eg: `.select('a, b, c')` => `select concat("a",', ',"b",', ',"c")`
+
+`|` - concatenates fields together using pipe delimiter
+	* eg: `.select('a|b|c')` => `select concat("a",'|',"b",'|',"c")`
+
+`/` - concatenates fields together using slash delimiter
+	* eg: `.select('a / b / c')` => `select concat("a",' / ',"b",' / ',"c")`
+
+`+` - concatenates fields together using empty string
+	* eg: `.select('a+b+c')` => `select concat("a",'',"b",'',"c")`
+
+
+Aggregate Functions
+
+'%' - `avg` aggregate function
+
+`#` - `count` function
+	* eg: `.select('#id')` => `select count("id") ...`
+
+
+`.` - auto-prefixes field name with the local `from` table
+	* eg: `.from('oranges').join('apples').select('.id', 'apple.id')` => `select "oranges"."id", "apple"."id" from "oranges" join "apples" ...
+
+`*` - reserved star selector
+	* eg: `.select('#*') ...` => `select count(*) ...`
+
+
+
+db.from('retailers')
+	.select('geojson')
+
+
+@	distinct
+#	count
+=	sum
+%	avg
+>	max
+<	min
+^	first
+$	last
+
+
+[]		array_agg
+%		avg
+&		bit_and
+|		bit_or
+&&		bool_and
+||		bool_or
+#		count
+&&		every
++		max
+-		min
+'$1'	string_agg(expression, $delim)
+=		sum
+<$1>	xml_agg(expression, $delim)
+
+
+
+Blocks
+
+.from
+
+.where
+
+.group
+
+.having
+
+.window // not supported
+
+.union / .intercept / .except
+
+.order
+
+.limit
+
+.offset
+
+.fetch // use .limit and .offset instead
+
+.for // not supported
+
+
+Where Blocks
+.where(some_types statement) where some_types must be one of the following:
+	string:	.where(string sql)
+	array:	.where(array statements)
+		the statements given in an array indicates use of `OR` to join elements together
+	object:	.where(object hash)
+
+"color" = 'red'
+{
+	color: 'red',
+}
+
+"color" = 'red'  or  "color" = 'green'
+{
+	color: ['red', 'green']
+}
+
+"color" = 'red'  and  "taste" = 'good'
+{
+	color: 'red',
+	taste: 'good'
+}
+
+("color" = 'red' or "color" = 'green')  and  "taste" = 'good'
+{
+	color: ['red', 'green'],
+	taste: 'good'
+}
+
+
+("color" = 'red' and "taste" = 'good')  or  ("color" = 'green' and "taste" = 'okay')
+[
+	{
+		color: 'red',
+		taste: 'good'
+	},
+	{
+		color: 'green',
+		taste: 'okay'
+	}
+]
+
+"color" = 'red' and ("taste" = 'good' or "quality" = 'organic')
+pj({ color: 'red' },
+	[
+		{ taste: 'good' },
+		{ quality: 'organic' },
+	]
+)
+
+
+### AND-ing
+
+Objects at the same tier within the same hash are AND-ed together:
+{ color: 'red', taste: 'good' } => ("color" = 'red' and "taste" = 'good')
+
+For AND-ing comparisons that require nested OR operations, use the `pj` handle function
+pj(
+	{ color: 'red' },
+	[
+		{ taste: 'good' },
+		{ quality: 'organic'}
+	],
+)
+
+
+### OR-ing
+Things at the same depth within the same array are OR-ed together:
+[
+	{ color: 'red' },
+	[ { taste: 'great' }, { taste: 'good', color: 'green' } ]
+]
+	=>  "color" = 'red' or ("taste" = 'great' or ("taste" = 'good' and "color" = 'green'))
+
+
+### Implicit joining
+{
+	color: 'red',
+	item: {
+		in_stock: true,
+	}
+}
+	=> join "item" on "fruit"."item_id" = "item"."id"
+		where "fruit"."color" = 'red' and "item"."in_stock" = 'true'
+
+
+### Comparisons
+{
+	color: 'red',
+	weight: pj('>', 0.6)
+}
+
+{
+	quality: pj('!=', 'poor')
+}
+
+{
+	taste: pj('like', ['okay','good','great'])
+}
+
+
+### Select Function Aliasing
+pj.alias("epoch_ms", "extract(epoch from $0) * 1000");
+
+db.select('time::epoch_ms')... 
+	=> select extract(epoch from "time") * 1000 as "time"
+
+pj.alias("epoch_ms($tz='UTC')", "extract(epoch from $0 at time zone '$tz') * 1000");
+
+db.select('time::epoch_ms')
+	=> select extract(epoch from "time" at time zone 'UTC') * 1000 as "time"
+
+db.select('time::epoch_ms(PST)')
+	=> select extract(epoch from "time" at time zone 'PST') * 1000 as "time"
+
+
+### Aggregate functions
+
+.select("','id")
+	=> select string_agg("id", ',')

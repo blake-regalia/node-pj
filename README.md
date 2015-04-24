@@ -9,14 +9,10 @@ $ npm install pj
 
 ## Examples
 
-### Select
+### Introduction
 
 ```javascript
 var pj = require('pj');
-
-pj.config({
-	global: true,
-});
 
 pj.from('retailers')
     .select('name','location::geojson')
@@ -24,19 +20,50 @@ pj.from('retailers')
         country: 'United States',
 		state: pj('!=','Texas'),
 	})
-	.order('name')
-	.dump();
+	.order('name');
 ```
 
-is equivalent to:
+will generate SQL equivalent to:
 
 ```sql
 select
-    ST_AsGeoJSON("retailers"."location") as "location",
-    "retailers"."name" 
+    "retailers"."name",
+    ST_AsGeoJSON("retailers"."location") as "location"
 from "retailers"
 where (
     "retailers"."country"='United States'
       and "retailers"."state" != 'Texas'
 ) order by "name" asc
 ```
+
+
+### Connecting to a database
+
+You can create a new instance of `pj` to get a handle to your database:
+
+```javascript
+var retailers = new pj('postgres://user@host/database');
+
+// or...
+
+var retailers = new pj({
+	user: 'user',
+	host: 'host',
+	database: 'database',
+});
+```
+
+You can also use the global `pj` as a handle to a single database by passing connection parameters to the `global` option in `pj.config`:
+
+```javascript
+pj.config({
+	global: {
+		user: 'blake',
+		host: 'localhost', // this is also by default
+		database: 'db_1337',
+	},
+});
+```
+
+
+
