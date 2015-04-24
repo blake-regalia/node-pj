@@ -1,10 +1,16 @@
-# node-pjs
+# node-pj
 
 
 ## Install
 ```sh
 $ npm install pj
 ```
+
+## Features
+ * Parameterized query substitution for values, fields, tables, operators, and functions
+ * Select function aliasing
+ * Using literals in clauses
+ * Implicit joins from where blocks
 
 
 ## Examples
@@ -14,11 +20,14 @@ $ npm install pj
 ```javascript
 var pj = require('pj');
 
-pj.from('retailers')
+var db = new pj('blake@/project_db');
+
+var exclude_states = ['Hawaii','Alaska'];
+db.from('retailers')
     .select('name','location::geojson')
     .where({
         country: 'United States',
-		state: pj('!=','Texas'),
+		state: pj('!=', exclude_states),
 	})
 	.order('name');
 ```
@@ -32,7 +41,7 @@ select
 from "retailers"
 where (
     "retailers"."country"='United States'
-      and "retailers"."state" != 'Texas'
+      and ("retailers"."state" != 'Hawaii' and "retailers"."state" != 'Alaska')
 ) order by "name" asc
 ```
 
@@ -63,7 +72,10 @@ pj.config({
 		database: 'db_1337',
 	},
 });
+
+pj.from('my_table')
+	...
 ```
 
 
-
+### 
