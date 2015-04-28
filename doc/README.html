@@ -1,0 +1,75 @@
+<h1 id="node-pj">node-pj</h1>
+<h2 id="install">Install</h2>
+<pre><code class="lang-sh"><span class="hljs-variable">$ </span>npm install pj
+</code></pre>
+<h2 id="features">Features</h2>
+<ul>
+<li>Custom type casting within select clauses</li>
+<li>Parameterized query substitution for values, fields, tables, operators, and functions</li>
+<li>Using literals in clauses</li>
+<li>Implicit joins within where blocks</li>
+</ul>
+<h2 id="examples">Examples</h2>
+<h3 id="introduction">Introduction</h3>
+<p>This API is designed to allow you to programatically construct SQL queries for PostgreSQL fast and efficiently. </p>
+<pre><code class="lang-javascript"><span class="hljs-keyword">var</span> pj = require(<span class="hljs-string">'pj'</span>);
+
+<span class="hljs-comment">// connect to database</span>
+<span class="hljs-keyword">var</span> db = <span class="hljs-keyword">new</span> pj(<span class="hljs-string">'blake@/project_db'</span>);
+
+<span class="hljs-comment">// define a relationship that joins two tables</span>
+db.define(<span class="hljs-string">'retailer.owned_by=owner.id'</span>);
+
+<span class="hljs-comment">// some values to exclude from our query</span>
+<span class="hljs-keyword">var</span> exclude_states = [<span class="hljs-string">'Hawaii'</span>,<span class="hljs-string">'Alaska'</span>];
+
+db.<span class="hljs-keyword">from</span>(<span class="hljs-string">'retailers'</span>)
+    .<span class="hljs-keyword">select</span>(<span class="hljs-string">'.name'</span>,<span class="hljs-string">'location::geojson'</span>)
+    .<span class="hljs-keyword">where</span>({
+        country: <span class="hljs-string">'USA'</span>,
+        state: pj(<span class="hljs-string">'!='</span>, exclude_states),
+        owner: {
+            name: pj(<span class="hljs-string">'not like'</span>, <span class="hljs-string">'%o\'connor'</span>)
+        }
+    })
+    .order(<span class="hljs-string">'name'</span>);
+</code></pre>
+<p>will generate SQL equivalent to:</p>
+<pre><code class="lang-sql"><span class="hljs-operator"><span class="hljs-keyword">select</span>
+    <span class="hljs-string">"retailers"</span>.<span class="hljs-string">"name"</span> <span class="hljs-keyword">as</span> <span class="hljs-string">"name"</span>,
+    ST_AsGeoJSON(<span class="hljs-string">"location"</span>) <span class="hljs-keyword">as</span> <span class="hljs-string">"location"</span>
+<span class="hljs-keyword">from</span> <span class="hljs-string">"retailers"</span>
+<span class="hljs-keyword">join</span> <span class="hljs-string">"owner"</span> <span class="hljs-keyword">on</span> <span class="hljs-string">"retailer"</span>.<span class="hljs-string">"owned_by"</span>=<span class="hljs-string">"owner"</span>.<span class="hljs-string">"id"</span>
+<span class="hljs-keyword">where</span> (
+    <span class="hljs-string">"country"</span> = <span class="hljs-string">'United States'</span>
+      <span class="hljs-keyword">and</span> (<span class="hljs-string">"state"</span> != <span class="hljs-string">'Hawaii'</span> <span class="hljs-keyword">and</span> <span class="hljs-string">"state"</span> != <span class="hljs-string">'Alaska'</span>)
+      <span class="hljs-keyword">and</span> <span class="hljs-string">"owner"</span>.<span class="hljs-string">"name"</span> <span class="hljs-keyword">not</span> <span class="hljs-keyword">like</span> <span class="hljs-string">'%o''connor'</span>
+) <span class="hljs-keyword">order</span> <span class="hljs-keyword">by</span> <span class="hljs-string">"name"</span> <span class="hljs-keyword">asc</span></span>
+</code></pre>
+<h3 id="connecting-to-a-database">Connecting to a database</h3>
+<p>You can create a new instance of <code>pj</code> to get a handle to your database:</p>
+<pre><code class="lang-javascript"><span class="hljs-keyword">var</span> retailers = <span class="hljs-keyword">new</span> pj(<span class="hljs-string">'postgres://user@host:5432/database'</span>);
+
+<span class="hljs-comment">// or...</span>
+
+<span class="hljs-keyword">var</span> retailers = <span class="hljs-keyword">new</span> pj({
+    user: <span class="hljs-string">'user'</span>,
+    host: <span class="hljs-string">'host'</span>,
+    port: <span class="hljs-number">5432</span>,
+    database: <span class="hljs-string">'database'</span>,
+});
+</code></pre>
+<p>You can also use the global <code>pj</code> as a handle to a single database by passing connection parameters to the <code>global</code> option in <code>pj.config</code>:</p>
+<pre><code class="lang-javascript">pj.config({
+    global: {
+        user: <span class="hljs-string">'blake'</span>,
+        host: <span class="hljs-string">'localhost'</span>, // this is also by default
+        port: <span class="hljs-number">5432</span>, // this is also by default
+        database: <span class="hljs-string">'my_db'</span>,
+    },
+});
+
+pj.from(<span class="hljs-string">'my_table'</span>)
+    <span class="hljs-keyword">...</span>
+</code></pre>
+<h3 id="-"> </h3>
