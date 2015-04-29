@@ -9,10 +9,9 @@ $ npm install pj
 ```
 
 ## Features
- * Custom type casting within select clauses
- * Parameterized query substitution for values, fields, tables, operators, and functions
- * Using literals in clauses
- * Implicit joins within where blocks
+ * Parameterized queries for values, columns, tables, operators, and functions
+ * Function aliasing within `select` clauses
+ * Implicit joins via `where` directives
 
 
 ## Examples
@@ -24,11 +23,11 @@ This API is designed to allow you to programatically construct SQL queries for P
 ```javascript
 var pj = require('pj');
 
-// connect to database
+// connect to database (uses node-postgres on node.js environments)
 var db = new pj('blake@/project_db');
 
 // define a relationship that joins two tables
-db.define('retailer.owned_by=owner.id');
+db.relate('retailer.owned_by=owner.id');
 
 // some values to exclude from our query
 var exclude_states = ['Hawaii','Alaska'];
@@ -95,15 +94,20 @@ pj.from('my_table')
 	...
 ```
 
+On the other hand, you may omit all arguments to the `pj` constructor if you only wish to generate query strings:
+
+```javascript
+var gen = pj();
+```
 
 
 ## Select Clause
 
-```js
+```javascript
 .select(field_1 [, field_2, ..., field_n)
 ```
 
-Where `typeof field_` must be either `string` or `object`. The `string` version supports a strict syntax for specifying column names, creating an alias, aggregating rows, using SQL operators, and type casting. The following section documents this syntax.
+Where `typeof field_` must be either `string` or `object`. The `string` version supports a strict syntax for specifying column names, creating an alias, aggregating rows, calling functions, using SQL operators, and type casting. The following section documents this syntax.
 
 ### Fields
 
@@ -114,7 +118,7 @@ There are several different ways to access a field, each one has a specific purp
 
 Using standard PostgreSQL identifier characters in the select-syntax string will yield a named identifier. 
 
-```js
+```javascript
 	.from('post').select('id')
 ```
 yields:
@@ -129,7 +133,7 @@ This can be useful for selecting aliases created elsewhere in the statement, but
 
 Prefixing the column name with a dot will produce an absolute reference to that column by using the name of the primary table specified in the `from` clause:
 
-```js
+```javascript
 	.from('post').select('.id')
 ```
 yiels:
@@ -139,11 +143,11 @@ yiels:
 
 It is typically a best practice to use absolute references when joining tables in order to prevent conflicts of columns with the same name from different tables:
 
-```js
+```javascript
 	.from('post').select('post.id', 'user.id', 'user.name')
 ```
 
-yields *(assuming the `post <-> user` table relationship is defined)*:
+yields *(assuming the `post <-> user` table [relationship is defined](#implicit-joins))*:
 ```sql
 	select "post"."id", "user"."id", "user"."name" from "post" join "user" on "user"."id" = "post"."user_id"
 ```
@@ -153,7 +157,7 @@ yields *(assuming the `post <-> user` table relationship is defined)*:
 
 Any field (including the outputs of functions) can be aliased by using the `=` operator:
 
-```js
+```javascript
 	.from('post').select('post_id=post.id')
 ```
 yields:
@@ -163,7 +167,7 @@ yields:
 
 Aliasing the table specified in the `from` clause will also be reflected in the dotal-prefix syntax:
 
-```js
+```javascript
 	.from('p=post').select('.id')
 ```
 yields:
@@ -179,9 +183,9 @@ Any field (including the outputs of functions) can be cast into alternate data t
 
 #### Native Data Types
 
-[PostgreSQL Data Types](http://www.postgresql.org/docs/9.4/static/datatype.html) can simply be placed after the `::` operator for casting to those types:
+[PostgreSQL Data Types](http://www.postgresql.org/docs/9.4/static/datatype.html) that appear after the `::` operator will simply cast the preceding field's value to its type:
 
-```js
+```javascript
 	.select('post.score::int')
 ```
 yields:
@@ -191,7 +195,7 @@ yields:
 
 Some native data types also accept arguments:
 
-```js
+```javascript
 	.select('post.score::decimal(6,4)')
 ```
 yields:
@@ -204,7 +208,7 @@ yields:
 
 You can define your own type casters using the `pj.type` function
 
-```js
+```javascript
 	pj.type(string typeDef, string outputSub)
 	pj.type(string typeDef, function outputGen)
 ```
@@ -213,7 +217,7 @@ You can define your own type casters using the `pj.type` function
 
 Passing a string into the `output` parameter will essentially substitue the field and any input arguments into the formatted string:
 
-```js
+```javascript
 
 	// defines a custom type, globally
 	pj.type('epoch_ms', 'extract(epoch from $0) * 1000');
@@ -229,7 +233,7 @@ yields:
 
 Parameters/variables are prefixed with a `$` symbol. `$0` references the field preceding the `::` operator, although the above function can also be invoked like this:
 
-```js
+```javascript
 	.select('epoch_ms(time)').from('post')
 ```
 yields:
@@ -241,19 +245,19 @@ yields:
 
 When creating a custom type caster, if the parameter name is an integer then the subsequent replacement will yield the matching field name:
 
-```js
-	pj.type('properName($1)', "concat($1, ',', $0)");
-	db.from('user').select('properName(firstName, lastName)')
+```javascript
+	pj.type('describeItem($1)', "concat($1, ' is ', $0)");
+	db.from('fruit').select('describeItem(type, color)')
 ```
 yields:
 ```sql
-	select concat("lastName", ',', "firstName") as "properName" from "user"
+	select concat("type", ' is ', "color") as "describeItem" from "fruit"
 ```
 
 ##### Textually-named Parameters: Values
 
 Using textually-named parameters will substitute escaped values into the string:
-```js
+```javascript
 	// specifies an optional parameter
 	pj.type('epoch_ms($tz=UTC)', "extract(epoch from $0 at time zone $tz)");
 
@@ -271,7 +275,7 @@ yields (respectively):
 ##### Prefix-named Parameters: SQL Injection
 
 If you wish to inject non-values (such as SQL keywords) into the query, you may prefix the variable name with `_`:
-```js
+```javascript
 	pj.type('addTime($_type,$value)', '$0 + $_type $value');
 	db.from('post').select('.time::addTime(interval, 3 hours)');
 ```
@@ -283,12 +287,38 @@ yields:
 Notice how the arguments to the call are not enclosed by any quotes. Arguments are terminated by the `)` character; for subtitution strings they are split by `,` delimiter. Custom type casters that specify a function instead of a string however receive the entire text within the `(` `)` characters (ie: the text is not split). This allows the handling function to parse the arguments however it wants (albeit devoid of any right parenthesis characters).
 
 
+#### Passing Arguments
+
+If you need to pass arguments to a function but the arguments contain `,` or `)` characters, you can opt for this style of passing arguments:
+
+```javascript
+	.select([string alias,] array fields [, string casters])
+```
+
+This style allows you apply different functions to multiple fields, and then apply a function that accepts those expressions as inputs:
+
+```javascript
+	db.set('plusOne', '$0::int + 1');
+	db.set('overTwo', '$0::int / 2');
+	db.set('product', '$0 * $1');
+	db.select([
+		'x::plusOne',
+		'y::overTwo'
+	], '::product');
+```
+yields:
+```sql
+	select ("x"::int + 1) * ("y"::int / 2) as "product";
+```
+
+
+
 #### PostGIS Type Casters
 
 By default, `pj` provides some custom types that alias [PostGIS Geometry Functions](http://postgis.net/docs/manual-2.1/reference.html) for constructing, accessing, editing, and outputting geometry data:
 
 For example:
-```js
+```javascript
 	.from('buildings').select('boundary::rotateX(90deg)::geojson')
 ```
 yields:
@@ -331,7 +361,7 @@ Here is a table that shows which functions are mapped to by their equivalent typ
 
 To generate values (single-quoted literals) within the select clause, you can use this special slash-notation:
 
-```js
+```javascript
 	.from().select('/This is a string/')
 ```
 yields:
@@ -340,7 +370,7 @@ yields:
 ```
 
 Any single-quotes within the `/` delimiters are escaped:
-```js
+```javascript
 	.from().select("/This is a 'string'/")
 ```
 yields:
@@ -349,7 +379,7 @@ yields:
 ```
 
 The first and last occurences of the `/` delimiter set the bounds for the value, so you do not need to worry about escaping extra `/` characters:
-```js
+```javascript
 	var text = "Don't worry / I'm safe!";
 	db.from().select('output=/'+text+'/')
 ```
@@ -360,10 +390,45 @@ yields:
 
 The slash-notation is convenient for constructing geometry with PostGIS:
 
-```js
-	.select('pointA=/point(34.72 -118.25)/::wkt_geom','pointB=/point(36.12 -119.4)/::wkt_geom','distance(pointA,pointB)')
+```javascript
+	.select([
+		'/point(34.72 -118.25)/::wkt_geom',
+		'/point(36.12 -119.4)/::wkt_geom'
+	], '::distance')
+```
+yields:
+```sql
+	select ST_Distance(
+		ST_GeomFromText('point(34.72 -118.25)'),
+		ST_GeomFromText('point(36.12 -119.4)')
+	) as "distance"
 ```
 
-```sql
-	select ST_GeomFromWKT('point(34.72 -118.25)') as "pointA", ST_GeomFromWKT('point(36.12 -119.4)') as "pointB", ST_Distance("pointA", "pointB") as "distance"
+
+## <a name="implicit-joins"> Implicit Joins
+
+You can take advantage of fixed relationships by declaring how two tables are related to one another.
+
+```javascript
+	.relate(string relationship)
+	.relate(string tableA_dot_columnB, string tableX_dot_columnY)
 ```
+
+For example:
+
+```javascript
+	db.relate('post.user_id=user.id');
+
+	db.from('post').where({
+		user: {
+			name: 'jedi',
+		}
+	})
+```
+yields:
+```sql
+	select * from "post"
+		join "user" on "post"."user_id" = "user"."id"
+		where "user"."name" = 'jedi';
+```
+	
