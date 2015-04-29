@@ -138,7 +138,7 @@ yiels:
 It is typically a best practice to use absolute references when joining tables in order to prevent conflicts of columns with the same name from different tables:
 
 ```js
-	.from('post').selet('post.id', 'user.id', 'user.name')
+	.from('post').select('post.id', 'user.id', 'user.name')
 ```
 
 yields *(assuming the `post <-> user` table relationship is defined)*:
@@ -177,7 +177,7 @@ Any field (including the outputs of functions) can be cast into alternate data t
 
 #### Native Data Types
 
-(PostgreSQL Data Types)[http://www.postgresql.org/docs/9.4/static/datatype.html] can simply be placed after the `::` operator for casting to those types:
+[PostgreSQL Data Types](http://www.postgresql.org/docs/9.4/static/datatype.html) can simply be placed after the `::` operator for casting to those types:
 
 ```js
 	.select('post.score::int')
@@ -200,12 +200,14 @@ yields:
 
 #### Custom Type Casters / Function Substitution
 
+You can define your own type casters using the `pj.type` function
+
 ```js
 	pj.type(string typeDef, string outputSub)
 	pj.type(string typeDef, function outputGen)
 ```
 
-You can define your own type casters. 
+##### Parameterized String Substitution
 
 Passing a string into the `output` parameter will essentially substitue the field and any input arguments into the formatted string:
 
@@ -221,7 +223,9 @@ yields:
 	select extract(epoch from "time") * 1000 as "time" from "post"
 ```
 
-Parameters/variables are prefixed with a `$` symbol. `$0` indicates the field that precedes the `::` operator, although the above function can also be invoked like this:
+##### The $0 Parameter
+
+Parameters/variables are prefixed with a `$` symbol. `$0` references the field preceding the `::` operator, although the above function can also be invoked like this:
 
 ```js
 	.select('epoch_ms(time)').from('post')
@@ -230,6 +234,8 @@ yields:
 ```sql
 	select extract(epoch from "time") * 1000 as "time" from "post"
 ```
+
+##### Ordinally-named Parameters: Fields
 
 When creating a custom type caster, if the parameter name is an integer then the subsequent replacement will yield the matching field name:
 
@@ -242,14 +248,16 @@ yields:
 	select concat("lastName", ',', "firstName") as "properName" from "user"
 ```
 
-Using named parameters will substitute escaped values into the string:
+##### Textually-named Parameters: Values
+
+Using textually-named parameters will substitute escaped values into the string:
 ```js
 	// specifies an optional parameter
 	pj.type('epoch_ms($tz=UTC)', "extract(epoch from $0 at time zone $tz)");
 
-	db.select('time::epoch_ms').from('post');
-	db.select('time::epoch_ms()').from('post');
-	db.select('time::epoch_ms(PST)').from('post');
+	db.select('time::epoch_ms').from('post'); // parenthesis are optional
+	db.select('time::epoch_ms()').from('post'); // will also use the default value
+	db.select('time::epoch_ms(PST)').from('post'); // note: argument is not enclosed with quotes
 ```
 yields (respectively):
 ```sql
@@ -258,7 +266,9 @@ yields (respectively):
 	select extract(epoch from "time" at time zone 'PST') as "time" from "post";
 ```
 
-If you wish to insert non-values (such as SQL keywords) into the query, you may prefix the variable name with `_`:
+##### Prefix-named Parameters: SQL Injection
+
+If you wish to inject non-values (such as SQL keywords) into the query, you may prefix the variable name with `_`:
 ```js
 	pj.type('addTime($_type,$value)', '$0 + $_type $value');
 	db.from('post').select('.time::addTime(interval, 3 hours)');
@@ -273,7 +283,7 @@ Notice how the arguments to the call are not enclosed by any quotes. Arguments a
 
 #### PostGIS Type Casters
 
-By default, `pj` provides some custom types that alias PostGIS Geometry Functions](http://postgis.net/docs/manual-2.1/reference.html) for constructing, accessing, editing, and outputting geometry data:
+By default, `pj` provides some custom types that alias [PostGIS Geometry Functions](http://postgis.net/docs/manual-2.1/reference.html) for constructing, accessing, editing, and outputting geometry data:
 
 For example:
 ```js
