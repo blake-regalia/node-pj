@@ -206,14 +206,33 @@ yields:
 ```
 
 
-#### Custom Type Casters / Function Substitution
+#### Function Aliasing
 
-You can define your own type casters using the `pj.type` function
+You can define your own custom 'functions' by aliasing PostgreSQL functions using `pj.alias`:
 
 ```javascript
-	pj.type(string typeDef, string outputSub)
-	pj.type(string typeDef, function outputGen)
+	pj.alias(string aliasDef, string outputSub)
+	pj.alias(string aliasDef, function outputGen)
 ```
+
+You may also defined these aliases on a single `pj` instance. Doing this will prevent other instances of `pj` (which were created from the same `pj` object) from holding conflicting aliases.
+
+```javascript
+	.alias(string aliasDef, string outputSub)
+	.alias(string aliasDef, function outputGen)
+```
+
+These aliases are invoked (and perform their subsequent substitution) by using the `::` operator, in the same way that type-casting is done:
+
+```javascript
+	pj.alias('excite', "concat($0, '!')");
+	db.from('fruit').select('color::excite');
+```
+yields:
+```sql
+	select concat("color", '!') from "fruit"
+```
+
 
 ##### Parameterized String Substitution
 
@@ -221,8 +240,8 @@ Passing a string into the `output` parameter will essentially substitue the fiel
 
 ```javascript
 
-	// defines a custom type, globally
-	pj.type('epoch_ms', 'extract(epoch from $0) * 1000');
+	// defines a custom function alias, globally
+	pj.alias('epoch_ms', 'extract(epoch from $0) * 1000');
 
 	db.select('time::epoch_ms').from('post')
 ```
@@ -245,10 +264,10 @@ yields:
 
 ##### Ordinally-named Parameters: Fields
 
-When creating a custom type caster, if the parameter name is an integer then the subsequent replacement will yield the matching field name:
+When creating a custom function alias, if the parameter name is an integer then the subsequent replacement will yield the matching field name:
 
 ```javascript
-	pj.type('describeItem($1)', "concat($1, ' is ', $0)");
+	pj.alias('describeItem($1)', "concat($1, ' is ', $0)");
 	db.from('fruit').select('describeItem(type, color)')
 ```
 yields:
@@ -264,7 +283,7 @@ The only exception is if the argument is created using the [slash-notation](#sla
 Using textually-named parameters will substitute escaped values into the string:
 ```javascript
 	// specifies an optional parameter
-	pj.type('epoch_ms($tz=UTC)', "extract(epoch from $0 at time zone $tz)");
+	pj.alias('epoch_ms($tz=UTC)', "extract(epoch from $0 at time zone $tz)");
 
 	db.select('time::epoch_ms').from('post'); // parenthesis are optional
 	db.select('time::epoch_ms()').from('post'); // will also use the default value
@@ -281,7 +300,7 @@ yields (respectively):
 
 If you wish to inject non-values (such as SQL keywords) into the query, you may prefix the variable name with `_`:
 ```javascript
-	pj.type('addTime($_type,$value)', '$0 + $_type $value');
+	pj.alias('addTime($_type,$value)', '$0 + $_type $value');
 	db.from('post').select('.time::addTime(interval, 3 hours)');
 ```
 yields:
@@ -289,12 +308,14 @@ yields:
 	select "post"."time" + interval '3 hours'
 ```
 
-Notice how the arguments to the call are not enclosed by any quotes. Arguments are terminated by the `)` character; for subtitution strings they are split by `,` delimiter. Custom type casters that specify a function instead of a string however receive the entire text within the `(` `)` characters (ie: the text is not split). This allows the handling function to parse the arguments however it wants (albeit devoid of any right parenthesis characters).
+Notice how the arguments to the call are not enclosed by any quotes. Arguments are terminated by the `)` character; for subtitution strings they are split by `,` delimiter. Custom function aliases that call `pj.alias` with a javascript function instead of a string however receive the entire text within the `(` `)` characters (ie: the text is not split). This allows the handling function to parse the arguments however it wants (albeit devoid of any right parenthesis characters).
+
+##### TODO: document `pj.alias('eg', function(){})`
 
 
 #### Passing Arguments
 
-If you need to pass arguments to a function but the arguments contain `,` or `)` characters, you can opt for this style of passing arguments:
+In some cases, you may need to opt for this style of passing arguments:
 
 ```javascript
 	.select([string alias,] array fields [, string casters])
@@ -303,23 +324,25 @@ If you need to pass arguments to a function but the arguments contain `,` or `)`
 This style allows you apply different functions to multiple fields, and then apply a function that accepts those expressions as inputs:
 
 ```javascript
-	db.set('plusOne', '$0 + 1');
-	db.set('overTwo', '$0 / 2');
-	db.set('product', '$0 * $1');
 	db.select([
-		'x::plusOne',
-		'y::overTwo'
-	], '::product');
+		'trajectory::startPoint',
+		'trajectory::endPoint'
+	], '::distance');
 ```
 yields:
 ```sql
-	select ("x" + 1) * ("y / 2) as "product";
+	select ST_Distance(
+		ST_StartPoint("trajectory"),
+		ST_EndPoint("trajectory")
+	) as "distance";
 ```
 
+`startPoint`, `endPoint` and `distance` are PostGIS function aliases that come shipped with `pj`.
 
-#### PostGIS Type Casters
 
-By default, `pj` provides some custom types that alias [PostGIS Geometry Functions](http://postgis.net/docs/manual-2.1/reference.html) for constructing, accessing, editing, and outputting geometry data:
+#### PostGIS Function Aliases
+
+By default, `pj` defines several functions that alias [PostGIS Geometry Functions](http://postgis.net/docs/manual-2.1/reference.html) for constructing, accessing, editing, and outputting geometry data:
 
 For example:
 ```javascript
@@ -330,34 +353,77 @@ yields:
 	select ST_AsGeoJSON(ST_RotateX("boundary", pi()*0.5)) as "boundary" from "building"
 ```
 
-Here is a table that shows which functions are mapped to by their equivalent type cast alias:
+Here is a table that shows which functions are mapped to by their equivalent alias:
 
-| PostGIS Function | `pj` Type Equivalent |
+##### Geometry Constructors
+
+| PostGIS Function | `pj` Alias Equivalent |
 | ---------------- | -------------------- |
-| ST_AsGeoJSON 	| geojson 	|
-| ST_AsKML 		| kml  		|
-| ST_AsText 	| wkt 		|
-| ST_AsEWKT		| ewkt 		|
-| ST_AsEWKB		| ewkb 		|
-| ST_AsBinary	| binary 	|
-| ST_AsGeoHash 	| geohash 	|
-| ST_AsSVG 		| svg 		|
-| ST_AsLatLonText | latlon 	|
+| ST_AsGeoJSON 		| geojson 	|
+| ST_AsKML 			| kml  		|
+| ST_AsText 		| wkt 		|
+| ST_AsEWKT			| ewkt 		|
+| ST_AsEWKB			| ewkb 		|
+| ST_AsBinary		| binary 	|
+| ST_AsGeoHash 		| geohash 	|
+| ST_AsSVG 			| svg 		|
+| ST_AsLatLonText 	| latlon 	|
 | | |
-| ST_GeomFromText	| wkt_geom |
-| ST_GeomFromWKB	| wkb_geom	|
-| ST_GeomFromEWKB	| ewkb_geom	|
-| ST_GeomFromEWKT	| ewkt_geom	|
+| ST_GeomFromText		| wkt_geom 		|
+| ST_GeomFromWKB		| wkb_geom		|
+| ST_GeomFromEWKB		| ewkb_geom		|
+| ST_GeomFromEWKT		| ewkt_geom		|
 | ST_GeomFromGeoHash	| geohash_geom	|
-| ST_GeomFromGML	| gml_geom	|
+| ST_GeomFromGML		| gml_geom		|
 | ST_GeomFromGeoJSON	| geojson_geom	|
-| ST_GeomFromKML	| kml_geom	|
+| ST_GeomFromKML		| kml_geom		|
 | | |
-| ST_GeogFromText	| wkt_geog |
+| ST_GeogFromText	| wkt_geog 	|
 | ST_GeogFromWKB	| wkb_geog	|
 | ST_GeogFromEWKB	| ewkb_geog	|
 | ST_GeogFromEWKT	| ewkt_geog	|
 | | |
+
+
+##### Geometry Accessors
+
+| PostGIS Function | `pj` Alias Equivalent |
+| ---------------- | -------------------- |
+| ST_X 				| x 		|
+| ST_Y 				| y 		|
+| ST_Z 				| z 		|
+| ST_M 				| m 		|
+| | |
+| ST_NumPoints 		| numPoints 	|
+| ST_NPoints 		| nPoints 		|
+| ST_PointN			| pointN 		|
+| ST_StartPoint 	| startPoint 	|
+| ST_EndPoint 		| endPoint 		|
+| | |
+| ST_NumInteriorRings 	| numInteriorRings 	|
+| ST_NRings 			| nRings 			|
+| ST_ExteriorRing 		| exteriorRing 		|
+| ST_InteriorRingN		| interiorRingN 	|
+| | |
+| ST_NumGeometries		| numGeometries 	|
+| ST_GeometryN			| geometryN 		|
+
+
+##### Geometry Editors
+
+| PostGIS Function | `pj` Alias Equivalent |
+| ---------------- | -------------------- |
+| ST_Scale 			| scale 			|
+| ST_Translate 		| translate 		|
+| ST_Rotate 		| rotate 			|
+| ST_RotateX 		| rotateX 			|
+| ST_RotateY 		| rotateY 			|
+| ST_RotateZ 		| rotateZ 			|
+| ST_Affine 		| affine 			|
+| ST_TransScale 	| transScale 		|
+| | |
+| ST_Transform 		| transform 		|
+| ST_SetSRID		| setSrid 			|
 
 
 
