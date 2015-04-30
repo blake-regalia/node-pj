@@ -38,7 +38,8 @@ db.from('retailers')
         country: 'USA',
 		state: pj('!=', exclude_states),
 		owner: {
-			name: pj('not like', '%o\'connor')
+			name: pj('not like', '%o\'connor'),
+			phone: /^[0-9]{10}$/,
 		}
 	})
 	.order('name');
@@ -57,6 +58,7 @@ where (
     "country" = 'United States'
       and ("state" != 'Hawaii' and "state" != 'Alaska')
       and "owner"."name" not like '%o''connor'
+      and "owner"."phone" ~ '^[0-9]{10}$'
 ) order by "name" asc
 ```
 
@@ -254,6 +256,9 @@ yields:
 	select concat("type", ' is ', "color") as "describeItem" from "fruit"
 ```
 
+The only exception is if the argument is created using the [slash-notation](#slash-notation), which turns the argument into a single-quoted value.
+
+
 ##### Textually-named Parameters: Values
 
 Using textually-named parameters will substitute escaped values into the string:
@@ -298,8 +303,8 @@ If you need to pass arguments to a function but the arguments contain `,` or `)`
 This style allows you apply different functions to multiple fields, and then apply a function that accepts those expressions as inputs:
 
 ```javascript
-	db.set('plusOne', '$0::int + 1');
-	db.set('overTwo', '$0::int / 2');
+	db.set('plusOne', '$0 + 1');
+	db.set('overTwo', '$0 / 2');
 	db.set('product', '$0 * $1');
 	db.select([
 		'x::plusOne',
@@ -308,9 +313,8 @@ This style allows you apply different functions to multiple fields, and then app
 ```
 yields:
 ```sql
-	select ("x"::int + 1) * ("y"::int / 2) as "product";
+	select ("x" + 1) * ("y / 2) as "product";
 ```
-
 
 
 #### PostGIS Type Casters
@@ -357,7 +361,7 @@ Here is a table that shows which functions are mapped to by their equivalent typ
 
 
 
-### Selecting Literals (Slash-Notation)
+### <a name="slash-notation"> Selecting Literals (Slash-Notation)
 
 To generate values (single-quoted literals) within the select clause, you can use this special slash-notation:
 
@@ -388,6 +392,20 @@ yields:
 	select 'Don''t worry / I''m safe!' as "output"
 ```
 
+Since this notation only allows you to insert one single-quoted value per javascript string, you can exploit the `array fields` parameter of the `select` function to pass multiple single-quoted values to a function:
+
+```javascript
+	db.set('join($1)', 'concat($0, ' ', $1');
+	db.select('message=', [
+		'/hello,/',
+		'/world!/'
+	], '::join')
+```
+yields:
+```sql
+	select concat('hello,', ' ', 'world!') as "message";
+```
+
 The slash-notation is convenient for constructing geometry with PostGIS:
 
 ```javascript
@@ -403,6 +421,7 @@ yields:
 		ST_GeomFromText('point(36.12 -119.4)')
 	) as "distance"
 ```
+
 
 
 ## <a name="implicit-joins"> Implicit Joins

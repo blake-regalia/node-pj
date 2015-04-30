@@ -25,10 +25,10 @@ db.from('retailers')
 `@` - shortcut for the `DISTINCT` operator
 	* eg: `.select('@icon') ...` => `select distinct "icon" ...`
 
-`,` - concatenates fields together using comma delimiter
+` ` - concatenates fields together using space delimiter
 	* eg: `.select('color item')` => `select concat("color",' ',"item")`
 
-` ` - concatenates fields together using space delimiter
+`,` - concatenates fields together using comma delimiter
 	* eg: `.select('a,b,c')` => `select concat("a",',',"b",',',"c")`
 	* eg: `.select('a, b, c')` => `select concat("a",', ',"b",', ',"c")`
 
@@ -80,8 +80,6 @@ $	last
 ||		bool_or
 #		count
 &&		every
-+		max
--		min
 '$1'	string_agg(expression, $delim)
 =		sum
 <$1>	xml_agg(expression, $delim)
@@ -89,6 +87,8 @@ $	last
 
 
 Blocks
+
+.select
 
 .from
 
@@ -491,6 +491,37 @@ The slash-notation is convenient for constructing geometry with PostGIS:
 	'max_salary=salary::max'
 
 
+### Mathematical Operations
+
+Since several of the special characters are used by `pj` for [various purposes](#select-operators), you can write mathematical expressions within the `{` `}` characters:
+
+So, normally:
+```js
+	.select('@x+y')
+```
+yields:
+```sql
+	select distinct concat("x", "y")
+```
+
+However:
+```js
+	.select('{@x+y}')
+```
+yields:
+```sql
+	select @ "x" + "y"
+```
+
+Slash-notation is excluded from these ranges, so if you intend to use mathematical operators with numeric literals you can simply write it thusly:
+
+```js
+	.select('{|/ 25.0}') // square root of 25.0
+```
+yields:
+```sql
+	select |/ 25.0
+```
 
 
 ### Custom Type Casting
