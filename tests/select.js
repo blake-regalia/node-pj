@@ -29,3 +29,7 @@ db.from('test')
 db.from('test')
 	.select('js_time=time::epoch_ms(PST)')
 	.dump();
+
+
+.select('lastName, firstName','($age yr old $sex)');
+.select('#@city')

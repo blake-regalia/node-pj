@@ -55,7 +55,7 @@ select
 from "retailers"
 join "owner" on "retailer"."owned_by"="owner"."id"
 where (
-    "country" = 'United States'
+    "country" = 'USA'
       and ("state" != 'Hawaii' and "state" != 'Alaska')
       and "owner"."name" not like '%o''connor'
       and "owner"."phone" ~ '^[0-9]{10}$'
@@ -215,7 +215,7 @@ You can define your own custom 'functions' by aliasing PostgreSQL functions usin
 	pj.alias(string aliasDef, function outputGen)
 ```
 
-You may also defined these aliases on a single `pj` instance. Doing this will prevent other instances of `pj` (which were created from the same `pj` object) from holding conflicting aliases.
+You may also define these aliases on a single `pj` instance. Doing this will prevent other instances created by the same `pj` object from holding conflicting aliases.
 
 ```javascript
 	.alias(string aliasDef, string outputSub)
@@ -282,7 +282,7 @@ The only exception is if the argument is created using the [slash-notation](#sla
 
 Using textually-named parameters will substitute escaped values into the string:
 ```javascript
-	// specifies an optional parameter
+	// specifies an optional parameter where 'UTC' is set as the default value
 	pj.alias('epoch_ms($tz=UTC)', "extract(epoch from $0 at time zone $tz)");
 
 	db.select('time::epoch_ms').from('post'); // parenthesis are optional
@@ -461,7 +461,7 @@ yields:
 Since this notation only allows you to insert one single-quoted value per javascript string, you can exploit the `array fields` parameter of the `select` function to pass multiple single-quoted values to a function:
 
 ```javascript
-	db.set('join($1)', 'concat($0, ' ', $1');
+	db.alias('join($1)', "concat($0, ' ', $1)");
 	db.select('message=', [
 		'/hello,/',
 		'/world!/'
