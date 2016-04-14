@@ -1,7 +1,7 @@
 {
   "name": "pj",
   "author": "Blake Regalia <blake.regalia@gmail.com> (http://blake-regalia.com)",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Create SQL strings for PostgreSQL by interfacing with a javascript API",
   "main": "./dist/pj.js",
   "scripts": {
